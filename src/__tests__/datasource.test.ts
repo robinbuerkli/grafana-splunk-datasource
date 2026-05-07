@@ -442,6 +442,51 @@ describe('DataSource runtime polling', () => {
   });
 });
 
+describe('DataSource query orchestration', () => {
+  it('runs base searches before chains but returns frames in target order', async () => {
+    const datasource = createDataSource();
+
+    jest.spyOn(datasource, 'doRequest').mockImplementation(async query => ({
+      sid: `sid-${query.refId}`,
+      fields: ['value'],
+      results: [{ value: `${query.refId}-value` }],
+    }));
+    const chainSpy = jest.spyOn(datasource, 'doChainRequest').mockResolvedValue({
+      fields: ['value'],
+      results: [{ value: 'C-value' }],
+    });
+
+    const response = await datasource.query(
+      createQueryRequest([
+        {
+          refId: 'C',
+          queryText: '| stats count by host',
+          searchType: 'chain',
+          baseSearchRefId: 'base-search',
+        },
+        {
+          refId: 'A',
+          queryText: 'index=_internal | head 1',
+          searchType: 'standard',
+        },
+        {
+          refId: 'B',
+          queryText: 'index=_internal | head 100',
+          searchType: 'base',
+          searchId: 'base-search',
+        },
+      ])
+    );
+
+    expect(response.data.map(frame => frame.refId)).toEqual(['C', 'A', 'B']);
+    expect(chainSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ refId: 'C' }),
+      expect.anything(),
+      expect.objectContaining({ refId: 'B', searchId: 'base-search', sid: 'sid-B' })
+    );
+  });
+});
+
 describe('DataSource base-search state isolation', () => {
   it('does not share in-flight base-search promises across datasource instances', async () => {
     const datasourceA = createDataSource();

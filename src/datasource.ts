@@ -268,48 +268,48 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
   async query(options: DataQueryRequest<SplunkQuery>): Promise<DataQueryResponse> {
     // Clean up stale cache entries periodically
     this.cleanupStaleCache();
-    
-    const standardSearches = options.targets.filter(query => this.resolveQuerySearchType(query) === 'standard');
-    const baseSearches = options.targets.filter(query => this.resolveQuerySearchType(query) === 'base');
-    const chainSearches = options.targets.filter(query => this.resolveQuerySearchType(query) === 'chain');
+
+    const indexedTargets = options.targets.map((query, index) => ({ query, index }));
+    const standardSearches = indexedTargets.filter(({ query }) => this.resolveQuerySearchType(query) === 'standard');
+    const baseSearches = indexedTargets.filter(({ query }) => this.resolveQuerySearchType(query) === 'base');
+    const chainSearches = indexedTargets.filter(({ query }) => this.resolveQuerySearchType(query) === 'chain');
+    const resultFrames = new Array<PartialDataFrame | undefined>(options.targets.length);
 
     // Standard searches run first with bounded concurrency.
-    const standardResults = await mapWithConcurrency(
+    await mapWithConcurrency(
       standardSearches,
       MAX_QUERY_EXECUTION_CONCURRENCY,
-      async (query) => {
+      async ({ query, index }) => {
         const result = await this.doRequest(query, options);
-        return this.createDataFrame(query, result);
+        resultFrames[index] = this.createDataFrame(query, result);
       }
     );
 
     // Base searches run afterward with the same bounded concurrency.
-    const completedBaseSearchResults = await mapWithConcurrency(
+    await mapWithConcurrency(
       baseSearches,
       MAX_QUERY_EXECUTION_CONCURRENCY,
-      async (query) => this.resolveBaseSearch(query, options)
-    );
-
-    const baseResults = completedBaseSearchResults.map((completedResult, index) =>
-      this.createDataFrame(baseSearches[index], {
-        fields: completedResult.fields,
-        results: completedResult.results,
-        sid: completedResult.sid,
-      })
-    );
-
-    // Chain searches are also independent once base searches are available.
-    const chainResults = await mapWithConcurrency(
-      chainSearches,
-      MAX_QUERY_EXECUTION_CONCURRENCY,
-      async (query) => {
-        const chainResult = await this.executeChainSearch(query, options);
-        return this.createDataFrame(query, chainResult);
+      async ({ query, index }) => {
+        const completedResult = await this.resolveBaseSearch(query, options);
+        resultFrames[index] = this.createDataFrame(query, {
+          fields: completedResult.fields,
+          results: completedResult.results,
+          sid: completedResult.sid,
+        });
       }
     );
 
-    const allResults = [...standardResults, ...baseResults, ...chainResults];
-    return { data: allResults };
+    // Chain searches are also independent once base searches are available.
+    await mapWithConcurrency(
+      chainSearches,
+      MAX_QUERY_EXECUTION_CONCURRENCY,
+      async ({ query, index }) => {
+        const chainResult = await this.executeChainSearch(query, options);
+        resultFrames[index] = this.createDataFrame(query, chainResult);
+      }
+    );
+
+    return { data: resultFrames.filter((frame): frame is PartialDataFrame => Boolean(frame)) };
   }
 
   private resolveQuerySearchType(query: SplunkQuery): EffectiveSearchType {

@@ -1,34 +1,23 @@
-import React, { PureComponent } from 'react';
+import React from 'react';
+import { DataSourcePluginOptionsEditorProps } from '@grafana/data';
 import {
+  AdvancedHttpSettings,
+  Auth,
   ConfigSection,
   ConnectionSettings,
-  Auth,
-  AdvancedHttpSettings,
   convertLegacyAuthProps,
 } from '@grafana/plugin-ui';
-import { DataSourcePluginOptionsEditorProps } from '@grafana/data';
+
 import { SplunkDataSourceOptions } from './types';
 
-interface Props extends DataSourcePluginOptionsEditorProps<SplunkDataSourceOptions> {}
+type Props = DataSourcePluginOptionsEditorProps<SplunkDataSourceOptions>;
 
-interface State {}
-
-export class ConfigEditor extends PureComponent<Props, State> {
-  constructor(props: Props) {
-    super(props);
-  }
-
-  render() {
-    const { options, onOptionsChange } = this.props;
-
-    return (
-      <>
-        {ConnectionSettings({ config: options, onChange: onOptionsChange }) as React.ReactElement}
-        <Auth {...convertLegacyAuthProps({ config: options, onChange: onOptionsChange })} />
-        <ConfigSection title="Advanced settings" isCollapsible isInitiallyOpen={false}>
-          {AdvancedHttpSettings({ config: options, onChange: onOptionsChange }) as React.ReactElement}
-        </ConfigSection>
-      </>
-    );
-  }
-}
+export const ConfigEditor = ({ options, onOptionsChange }: Props) => (
+  <>
+    {ConnectionSettings({ config: options, onChange: onOptionsChange }) as React.ReactElement}
+    <Auth {...convertLegacyAuthProps({ config: options, onChange: onOptionsChange })} />
+    <ConfigSection title="Advanced settings" isCollapsible isInitiallyOpen={false}>
+      {AdvancedHttpSettings({ config: options, onChange: onOptionsChange }) as React.ReactElement}
+    </ConfigSection>
+  </>
+);

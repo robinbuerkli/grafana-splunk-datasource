@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import type { QueryEditorProps } from '@grafana/data';
 import type { DataQuery } from '@grafana/schema';
 import { TextArea } from '@grafana/ui';
@@ -26,29 +26,24 @@ const normalizeVariableQuery = (query: SplunkVariableQuery): SplunkVariableQuery
 };
 
 export const VariableQueryEditor = ({ onChange, onRunQuery, query }: VariableQueryProps) => {
-  const [state, setState] = useState<SplunkVariableQuery>(() => normalizeVariableQuery(query));
-
-  useEffect(() => {
-    setState(normalizeVariableQuery(query));
-  }, [query]);
+  const normalizedQuery = normalizeVariableQuery(query);
 
   const saveQuery = () => {
-    onChange(state);
     onRunQuery();
   };
 
   const handleChange = (event: React.FormEvent<HTMLTextAreaElement>) => {
     const queryText = event.currentTarget.value;
-    setState((currentState) => ({
-      ...currentState,
+    onChange({
+      ...normalizedQuery,
       queryText,
       query: queryText,
-    }));
+    });
   };
 
   return (
     <div className="gf-form">
-      <TextArea name="queryText" onBlur={saveQuery} onChange={handleChange} value={state.queryText ?? ''} />
+      <TextArea name="queryText" onBlur={saveQuery} onChange={handleChange} value={normalizedQuery.queryText ?? ''} />
     </div>
   );
 };

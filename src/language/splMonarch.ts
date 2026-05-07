@@ -3,6 +3,7 @@
 export const splLanguage = {
   // Set default token to avoid errors
   defaultToken: 'source.spl',
+  ignoreCase: true,
 
   // --- Tokenizer Configuration ---
   // Commands (blue)
@@ -23,13 +24,10 @@ export const splLanguage = {
     'untable', 'where', 'x11', 'xmlkv', 'xpath', 'xyseries'
   ],
 
-  // Clauses (orange) - haven't figured out how to make these case-insensitive yet. This will do for now.
-  // Also not sure how many of these are actually clauses, just guessed. If I see any issues I'll commit an update that can be rolled into the next release.
+  // Clauses (orange)
   splClauses: [
-    'as', 'AS', 'by', 'BY', 'over', 'OVER', 'in', 'IN', 'where', 'WHERE', 
-    'output', 'OUTPUT', 'outputnew', 'OUTPUTNEW', 'on', 'ON', 'using', 'USING', 
-    'with', 'WITH', 'for', 'FOR', 'against', 'AGAINST', 'sortby', 'SORTBY',
-    'and', 'AND', 'or', 'OR', 'not', 'NOT', 'xor', 'XOR'
+    'as', 'by', 'over', 'in', 'where', 'output', 'outputnew', 'on', 'using',
+    'with', 'for', 'against', 'sortby', 'and', 'or', 'not', 'xor'
   ],
 
   // Aggregation/statistical functions (pink/purple)

@@ -1,3 +1,8 @@
+## e8c0bb1 (2026-06-07)
+
+chore: add release
+
+
 ## 3fdb379 (2026-05-07)
 
 Merge branch release to main

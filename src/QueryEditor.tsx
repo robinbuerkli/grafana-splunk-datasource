@@ -110,7 +110,7 @@ export const QueryEditor = ({ onChange, query: rawQuery }: Props) => {
       }) as SplunkQuery,
     [rawQuery]
   );
-  const { queryText = '', searchType = 'standard', searchId, baseSearchRefId } = query;
+  const { queryText = '', searchType = 'standard', searchId, baseSearchRefId, splunkApp } = query;
   const isChainSearch = searchType === 'chain';
   const isBaseSearch = searchType === 'base';
   const currentSearchType = searchTypeOptions.find(option => option.value === searchType) ?? searchTypeOptions[0];
@@ -184,6 +184,17 @@ export const QueryEditor = ({ onChange, query: rawQuery }: Props) => {
           </Field>
         </div>
       )}
+
+      <div className={styles.conditionalField}>
+        <Field label="Splunk App Override" description="Splunk app context to run this query in. Overrides the default app configured in the data source.">
+          <Input
+            value={splunkApp ?? ''}
+            onChange={event => onChange({ ...query, splunkApp: event.currentTarget.value })}
+            placeholder="e.g. search"
+            width={40}
+          />
+        </Field>
+      </div>
 
       <div className={styles.queryContainer}>
         <Field

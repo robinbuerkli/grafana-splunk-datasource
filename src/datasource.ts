@@ -158,11 +158,21 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
   variables = new SplunkCustomVariableSupport(this);
   private readonly baseSearchCache: Map<string, BaseSearchResult> = new Map();
   private readonly baseSearchInflight: Map<string, Promise<BaseSearchResult>> = new Map();
+  private readonly instanceSettings: DataSourceInstanceSettings<SplunkDataSourceOptions>;
 
   constructor(instanceSettings: DataSourceInstanceSettings<SplunkDataSourceOptions>) {
     super(instanceSettings);
-
+    this.instanceSettings = instanceSettings;
     this.url = instanceSettings.url;
+  }
+
+  private getBaseUrl(splunkApp?: string): string {
+    let app = splunkApp?.trim() || this.instanceSettings.jsonData.splunkApp?.trim();
+    if (app) {
+      app = getTemplateSrv().replace(app);
+      return `${this.url}/servicesNS/-/${app}`;
+    }
+    return `${this.url}/services`;
   }
 
   async metricFindQuery(query: VariableQueryInput, options?: DataQueryRequest<SplunkQuery>): Promise<MetricFindValue[]> {
@@ -549,12 +559,13 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
   private async waitForSearchCompletion(
     sid: string,
     pollIntervalMs: number = SEARCH_POLL_INTERVAL_MS,
-    timeoutMs: number = SEARCH_POLL_TIMEOUT_MS
+    timeoutMs: number = SEARCH_POLL_TIMEOUT_MS,
+    splunkApp?: string
   ): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
 
     while (Date.now() < deadline) {
-      if (await this.doSearchStatusRequest(sid)) {
+      if (await this.doSearchStatusRequest(sid, splunkApp)) {
         return true;
       }
 
@@ -566,7 +577,7 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
       await delay(Math.min(pollIntervalMs, remainingMs));
     }
 
-    return this.doSearchStatusRequest(sid);
+    return this.doSearchStatusRequest(sid, splunkApp);
   }
 
   async testDatasource() {
@@ -580,7 +591,7 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
       await lastValueFrom(
         (getBackendSrv().fetch<any>({
           method: 'POST',
-          url: this.url + '/services/search/jobs',
+          url: `${this.getBaseUrl()}/search/jobs`,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
           },
@@ -601,11 +612,11 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
     }
   }
 
-  async doSearchStatusRequest(sid: string) {
+  async doSearchStatusRequest(sid: string, splunkApp?: string) {
     const response: any = await lastValueFrom(
       (getBackendSrv().fetch<any>({
         method: 'GET',
-        url: this.url + '/services/search/jobs/' + sid,
+        url: `${this.getBaseUrl(splunkApp)}/search/jobs/${sid}`,
         params: {
           output_mode: 'json',
         },
@@ -633,7 +644,7 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
     const response: any = await lastValueFrom(
       (getBackendSrv().fetch<any>({
         method: 'POST',
-        url: this.url + '/services/search/jobs',
+        url: `${this.getBaseUrl(query.splunkApp)}/search/jobs`,
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
@@ -644,7 +655,7 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
     return { sid };
   }
 
-  async doGetAllResultsRequest(sid: string) {
+  async doGetAllResultsRequest(sid: string, splunkApp?: string) {
     const count = 50000;
     let offset = 0;
     let isFirst = true;
@@ -656,7 +667,7 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
       const response: any = await lastValueFrom(
         (getBackendSrv().fetch<any>({
           method: 'GET',
-          url: this.url + '/services/search/jobs/' + sid + '/results',
+          url: `${this.getBaseUrl(splunkApp)}/search/jobs/${sid}/results`,
           params: {
             output_mode: 'json',
             offset: offset,
@@ -695,12 +706,14 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
     const searchResult = await this.doSearchRequest(query, options);
     const sid: string = searchResult?.sid || '';
     if (sid.length > 0) {
-      const isComplete = await this.waitForSearchCompletion(sid);
+      const isComplete = query.splunkApp
+        ? await this.waitForSearchCompletion(sid, undefined, undefined, query.splunkApp)
+        : await this.waitForSearchCompletion(sid);
       if (!isComplete) {
         throw new SplunkSearchTimeoutError(sid, 'standard', SEARCH_POLL_TIMEOUT_MS);
       }
 
-      const result = await this.doGetAllResultsRequest(sid);
+      const result = await this.doGetAllResultsRequest(sid, query.splunkApp);
       return { ...result, sid };
     }
     return defaultQueryRequestResults;
@@ -739,7 +752,7 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
       const response: any = await lastValueFrom(
         (getBackendSrv().fetch<any>({
           method: 'POST',
-          url: this.url + '/services/search/jobs',
+          url: `${this.getBaseUrl(query.splunkApp)}/search/jobs`,
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
           },
@@ -748,12 +761,14 @@ export class DataSource extends DataSourceApi<SplunkQuery, SplunkDataSourceOptio
       );
       const sid: string = (response.data as any)?.sid ?? '';
       if (sid.length > 0) {
-        const isComplete = await this.waitForSearchCompletion(sid);
+        const isComplete = query.splunkApp
+          ? await this.waitForSearchCompletion(sid, undefined, undefined, query.splunkApp)
+          : await this.waitForSearchCompletion(sid);
         if (!isComplete) {
           throw new SplunkSearchTimeoutError(sid, 'chain', SEARCH_POLL_TIMEOUT_MS);
         }
 
-        const result = await this.doGetAllResultsRequest(sid);
+        const result = await this.doGetAllResultsRequest(sid, query.splunkApp);
         return result;
       }
 

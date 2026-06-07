@@ -50,11 +50,13 @@ jest.mock('@grafana/data', () => {
   };
 });
 
+const mockTemplateSrv = {
+  replace: jest.fn((value: string) => value),
+};
+
 jest.mock('@grafana/runtime', () => ({
   getBackendSrv: jest.fn(),
-  getTemplateSrv: jest.fn(() => ({
-    replace: (value: string) => value,
-  })),
+  getTemplateSrv: jest.fn(() => mockTemplateSrv),
 }));
 
 const createDataSource = () => {
@@ -642,5 +644,122 @@ describe('DataSource.createDataFrame', () => {
         values: [2, 3, 4, 5, 6, 7, 8],
       })
     );
+  });
+});
+
+describe('DataSource Splunk App configuration', () => {
+  beforeEach(() => {
+    mockedGetBackendSrv.mockReset();
+  });
+
+  it('uses /services/search/jobs by default when no app is configured', async () => {
+    const datasource = createDataSource();
+    const fetchMock = jest.fn().mockReturnValue(of({ data: { sid: 'sid-123' } }));
+    mockedGetBackendSrv.mockReturnValue({ fetch: fetchMock });
+
+    await datasource.doSearchRequest(
+      { refId: 'A', queryText: 'index=_internal', searchType: 'standard' } as any,
+      createQueryRequest([{ refId: 'A' }])
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'http://localhost/services/search/jobs',
+      })
+    );
+  });
+
+  it('uses /servicesNS/-/{app}/search/jobs when default app is configured on datasource', async () => {
+    const settings = {
+      id: 1,
+      uid: 'splunk-test',
+      type: 'essinghigh-splunk-datasource',
+      name: 'Splunk',
+      access: 'proxy',
+      url: 'http://localhost',
+      jsonData: {
+        splunkApp: 'my-default-app',
+      },
+    } as any;
+    const datasource = new DataSource(settings);
+    const fetchMock = jest.fn().mockReturnValue(of({ data: { sid: 'sid-123' } }));
+    mockedGetBackendSrv.mockReturnValue({ fetch: fetchMock });
+
+    await datasource.doSearchRequest(
+      { refId: 'A', queryText: 'index=_internal', searchType: 'standard' } as any,
+      createQueryRequest([{ refId: 'A' }])
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'http://localhost/servicesNS/-/my-default-app/search/jobs',
+      })
+    );
+  });
+
+  it('uses /servicesNS/-/{app}/search/jobs when query override is set', async () => {
+    const settings = {
+      id: 1,
+      uid: 'splunk-test',
+      type: 'essinghigh-splunk-datasource',
+      name: 'Splunk',
+      access: 'proxy',
+      url: 'http://localhost',
+      jsonData: {
+        splunkApp: 'my-default-app',
+      },
+    } as any;
+    const datasource = new DataSource(settings);
+    const fetchMock = jest.fn().mockReturnValue(of({ data: { sid: 'sid-123' } }));
+    mockedGetBackendSrv.mockReturnValue({ fetch: fetchMock });
+
+    await datasource.doSearchRequest(
+      { refId: 'A', queryText: 'index=_internal', searchType: 'standard', splunkApp: 'my-override-app' } as any,
+      createQueryRequest([{ refId: 'A' }])
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'http://localhost/servicesNS/-/my-override-app/search/jobs',
+      })
+    );
+  });
+
+  it('interpolates template variables in splunkApp name', async () => {
+    const settings = {
+      id: 1,
+      uid: 'splunk-test',
+      type: 'essinghigh-splunk-datasource',
+      name: 'Splunk',
+      access: 'proxy',
+      url: 'http://localhost',
+      jsonData: {},
+    } as any;
+    const datasource = new DataSource(settings);
+    const fetchMock = jest.fn().mockReturnValue(of({ data: { sid: 'sid-123' } }));
+    mockedGetBackendSrv.mockReturnValue({ fetch: fetchMock });
+
+    // Mock templateSrv to replace '$app' with 'interpolated-app'
+    const { getTemplateSrv } = require('@grafana/runtime');
+    const templateSrv = getTemplateSrv();
+    templateSrv.replace.mockImplementation((val: string) => {
+      if (val === '$app') {
+        return 'interpolated-app';
+      }
+      return val;
+    });
+
+    await datasource.doSearchRequest(
+      { refId: 'A', queryText: 'index=_internal', searchType: 'standard', splunkApp: '$app' } as any,
+      createQueryRequest([{ refId: 'A' }])
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'http://localhost/servicesNS/-/interpolated-app/search/jobs',
+      })
+    );
+
+    templateSrv.replace.mockRestore();
   });
 });

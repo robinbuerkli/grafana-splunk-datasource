@@ -28,6 +28,7 @@ export interface SplunkQuery extends DataQuery {
   mode?: 'base' | 'chain'; // For backward compatibility
   baseSearchRefId?: string;
   searchId?: string; // For base searches, this will be used to identify them
+  splunkApp?: string;
 }
 
 export const defaultQuery: Partial<SplunkQuery> = {
@@ -40,6 +41,7 @@ export const defaultQuery: Partial<SplunkQuery> = {
  */
 export interface SplunkDataSourceOptions extends DataSourceJsonData {
   endpoint?: string;
+  splunkApp?: string;
 }
 
 /**

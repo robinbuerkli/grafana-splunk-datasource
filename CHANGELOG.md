@@ -1,3 +1,8 @@
+## f06b41d (2026-06-07)
+
+Update changelog for release e8c0bb1
+
+
 ## e8c0bb1 (2026-06-07)
 
 chore: add release
